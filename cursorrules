@@ -1,0 +1,122 @@
+# Crescia — Cursor AI Rules
+# AP/IB/SAT Exam Prep Platform with Garden Gamification
+# Stack: Next.js 14 · TypeScript · Tailwind CSS · shadcn/ui · Supabase · Clerk · Stripe · Anthropic API
+
+## PROJECT IDENTITY
+- Product name: Crescia
+- Purpose: Gamified AP/IB/SAT exam prep platform with a garden-growth mechanic
+- MVP subjects: AP Statistics, AP Biology, AP Calculus AB/BC
+- Primary users: High school students (16–18), secondary: parents
+
+## ARCHITECTURE RULES
+- Framework: Next.js 14 with App Router. Never use Pages Router.
+- All pages live under /app. All API logic lives in /app/api or as Server Actions.
+- NEVER call the Anthropic API from the browser or client components. All AI calls go through Server Actions or API Routes only.
+- NEVER expose API keys client-side. All secrets live in .env.local and are accessed server-side only.
+- Use TypeScript strictly. Define interfaces for all data shapes in /types.
+- Use Supabase for all database operations. Never use localStorage or sessionStorage for user data.
+- Use Clerk for all authentication. Never roll custom auth.
+- Row Level Security (RLS) must be enabled on every Supabase table. Always enforce user_id = auth.uid() policies.
+
+## FOLDER STRUCTURE
+/app                        → Next.js App Router pages and layouts
+/app/dashboard              → Protected main app (Clerk middleware guards this)
+/app/dashboard/study        → Study session page
+/app/dashboard/garden       → Garden gamification tab
+/app/dashboard/profile      → User profile, stats, achievements
+/app/dashboard/subjects     → Subject selection
+/app/(auth)                 → Sign-in and sign-up pages
+/app/api                    → API routes: questions, sessions, stripe, webhooks
+/app/api/webhooks/clerk     → Clerk webhook handler
+/app/api/webhooks/stripe    → Stripe webhook handler
+/app/api/questions          → Question generation and grading endpoints
+/components/ui              → shadcn/ui base components (do not edit)
+/components/study           → QuestionCard, FRQInput, Timer, AnswerFeedback
+/components/garden          → GardenPlot, PlantCard, SeedShop, GardenGrid
+/components/rpg             → XPBar, StreakCounter, AchievementBadge, LevelDisplay
+/components/analytics       → ReadinessScore, TopicHeatmap, SessionHistory
+/lib/ai                     → Anthropic client, prompt templates, response parsers
+/lib/supabase               → Supabase client (server + browser), typed DB helpers
+/lib/stripe                 → Stripe client, subscription helpers, plan gating
+/lib/gamification           → XP logic, level thresholds, achievement detection, garden state
+/lib/scraper                → Question bank scraping utilities (server-side only)
+/types                      → All TypeScript interfaces
+/hooks                      → Custom React hooks
+
+## CODING STANDARDS
+- Use Server Actions for all data mutations (form submissions, session saves, XP updates).
+- Use server components by default. Only add "use client" when strictly necessary (interactivity, hooks).
+- All Supabase queries must be typed using the generated Database type from /types/supabase.ts.
+- Use shadcn/ui components as the base. Customize via Tailwind only — no inline styles.
+- Framer Motion is allowed for animations (XP gain, level-up, plant growth transitions only).
+- Recharts is the only charting library. Use it for the readiness score history and topic heatmap.
+- Never use any other UI or charting library without explicit instruction.
+
+## AI / ANTHROPIC RULES
+- Model: claude-sonnet-4-20250514 always. Never hardcode a different model.
+- Always implement prompt caching for system prompts using cache_control: { type: "ephemeral" }.
+- Question generation must return structured JSON. Always validate the JSON shape before saving.
+- FRQ grading must return: { score: number, max_score: number, feedback: string[], rubric_points: RubricPoint[] }
+- Cap AI calls with a rate limiter: free tier max 10 AI calls/day, paid tier unlimited.
+- Cache generated questions in the questions_cache table before returning to client.
+
+## DATABASE RULES
+- Every table must have: id (uuid), user_id (uuid, FK to users), created_at (timestamp).
+- Never delete records. Use soft deletes with a deleted_at column.
+- Aggregate stats (topic accuracy, readiness score) are stored in topic_stats, not recomputed live.
+- Garden state is stored in garden_plots and plants tables, not in component state.
+
+## GAMIFICATION RULES
+- XP is only awarded for correct answers. Never award XP for participation or time spent.
+- Streak logic: study at least once per day = streak maintained. Grace day: 1 per week.
+- Readiness score: weighted average of recent topic_stats accuracy, updated after every session.
+- Plant growth: driven by streak maintenance and challenge completion, not by XP directly.
+- Shards (currency): earned by correct answers, challenges, streaks. Never purchasable with money.
+
+## PAYMENTS (STRIPE)
+- Stripe is wired in TEST MODE only for MVP. Never switch to live mode without explicit instruction.
+- Paywall logic must be enforced server-side in Server Actions, not just hidden in the UI.
+- Free tier: 10 questions/day, 1 hint token/day, basic readiness score.
+- Paid tier (Student): unlimited questions, 3 hint tokens/day, full heatmap, FRQ grader.
+- Always check user plan in /lib/stripe/plan.ts before allowing gated features.
+
+## DEFERRED FEATURES (DO NOT BUILD YET)
+- Parent account linking and parent dashboard
+- Party/group study system
+- Lockdown browser
+- IB curriculum
+- SAT content
+- Diagnostic/prerequisite test
+- Tutor partnerships and video sharing
+- Leaderboards
+- Companion/pet system
+- Full Stripe live mode / real payments
+- Mobile app
+
+## COMPONENT CREATION RULES
+- Before creating any new component, check if shadcn/ui has one that fits.
+- Every new component must have TypeScript props interface defined above the component.
+- Client components must have "use client" as the very first line.
+- Never put data fetching inside client components. Fetch in server components and pass as props.
+
+## ERROR HANDLING
+- All Server Actions must return { success: boolean, data?: T, error?: string }.
+- All API routes must return proper HTTP status codes.
+- Never expose raw error messages to the client. Log server-side, return safe messages client-side.
+- Wrap all Anthropic API calls in try/catch with a fallback error message.
+
+## NAMING CONVENTIONS
+- Files: kebab-case (question-card.tsx, topic-heatmap.tsx)
+- Components: PascalCase (QuestionCard, TopicHeatmap)
+- Functions: camelCase (generateQuestion, updateTopicStats)
+- Database tables: snake_case (topic_stats, garden_plots)
+- Environment variables: SCREAMING_SNAKE_CASE (ANTHROPIC_API_KEY)
+- Types/Interfaces: PascalCase with descriptive names (QuestionResult, SessionSummary)
+
+## WHEN GENERATING CODE
+1. Always check the folder structure above before creating new files.
+2. Always use existing types from /types before defining new ones.
+3. Always use the Supabase client from /lib/supabase — never instantiate a new one.
+4. Always use the Anthropic client from /lib/ai/client.ts — never instantiate a new one.
+5. When in doubt about a UI component, check shadcn/ui first.
+6. State what you're building, which files you're touching, and why before writing code.
