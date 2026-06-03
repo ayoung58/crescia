@@ -5,7 +5,6 @@ import {
   Progress,
   ProgressIndicator,
   ProgressTrack,
-  ProgressValue,
 } from "@/components/ui/progress";
 import { cn } from "@/lib/utils";
 
@@ -99,9 +98,9 @@ export default function DashboardPage() {
             <Progress value={DAILY_GOAL_PROGRESS} className="flex-col gap-2">
               <div className="flex w-full items-center justify-between gap-3">
                 <span className="text-sm text-muted-foreground">Progress</span>
-                <ProgressValue className="ml-0 text-sm font-medium text-foreground">
+                <span className="text-sm font-medium tabular-nums text-foreground">
                   {DAILY_GOAL_PROGRESS}%
-                </ProgressValue>
+                </span>
               </div>
               <ProgressTrack className="h-3">
                 <ProgressIndicator />
