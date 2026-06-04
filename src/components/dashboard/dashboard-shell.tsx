@@ -6,6 +6,7 @@ import { useState } from "react";
 import { UserButton } from "@clerk/nextjs";
 import {
   BookOpen,
+  Gem,
   Home,
   Leaf,
   PanelLeft,
@@ -14,6 +15,8 @@ import {
   type LucideIcon,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
+import { useUserStats } from "@/contexts/user-stats-context";
+import { formatWithCommas } from "@/lib/format";
 import { cn } from "@/lib/utils";
 
 const NAV_ITEMS: { href: string; label: string; icon: LucideIcon }[] = [
@@ -86,6 +89,7 @@ function NavLink({
 export function DashboardShell({ children }: { children: React.ReactNode }) {
   const pathname = usePathname();
   const [collapsed, setCollapsed] = useState(false);
+  const { shards } = useUserStats();
 
   return (
     <div className="flex min-h-screen bg-background">
@@ -97,27 +101,57 @@ export function DashboardShell({ children }: { children: React.ReactNode }) {
       >
         <div
           className={cn(
-            "flex h-14 shrink-0 items-center border-b border-border",
-            collapsed ? "justify-center px-2" : "justify-between px-4"
+            "flex shrink-0 flex-col border-b border-border",
+            collapsed ? "items-center px-2 py-3" : "px-4 py-3"
           )}
         >
-          {!collapsed && (
-            <span className="font-semibold tracking-tight">Crescia</span>
-          )}
-          <Button
-            type="button"
-            variant="ghost"
-            size="icon-sm"
-            aria-label={collapsed ? "Expand sidebar" : "Collapse sidebar"}
-            onClick={() => setCollapsed((c) => !c)}
-            className="text-muted-foreground"
-          >
-            {collapsed ? (
-              <PanelLeft className="size-4" />
-            ) : (
-              <PanelLeftClose className="size-4" />
+          <div
+            className={cn(
+              "flex w-full items-center",
+              collapsed ? "justify-center" : "justify-between"
             )}
-          </Button>
+          >
+            {!collapsed && (
+              <span className="font-semibold tracking-tight">Crescia</span>
+            )}
+            <Button
+              type="button"
+              variant="ghost"
+              size="icon-sm"
+              aria-label={collapsed ? "Expand sidebar" : "Collapse sidebar"}
+              onClick={() => setCollapsed((c) => !c)}
+              className="text-muted-foreground"
+            >
+              {collapsed ? (
+                <PanelLeft className="size-4" />
+              ) : (
+                <PanelLeftClose className="size-4" />
+              )}
+            </Button>
+          </div>
+          {!collapsed && (
+            <div
+              className="mt-2 flex items-center gap-2 text-sm font-medium tabular-nums"
+              title="Shard balance"
+            >
+              <Gem
+                className="size-4 shrink-0 text-[#C9A84C]"
+                aria-hidden
+              />
+              <span>{formatWithCommas(shards)}</span>
+            </div>
+          )}
+          {collapsed && (
+            <div
+              className="mt-2 flex flex-col items-center gap-0.5"
+              title={`${formatWithCommas(shards)} shards`}
+            >
+              <Gem
+                className="size-4 shrink-0 text-[#C9A84C]"
+                aria-hidden
+              />
+            </div>
+          )}
         </div>
 
         <nav className="flex flex-1 flex-col gap-1 p-2">

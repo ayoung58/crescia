@@ -1,4 +1,5 @@
 import Link from "next/link";
+import { auth } from "@clerk/nextjs/server";
 import { Coins, Flame } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import {
@@ -6,7 +7,14 @@ import {
   ProgressIndicator,
   ProgressTrack,
 } from "@/components/ui/progress";
+import { createClient } from "@/lib/supabase/server";
 import { cn } from "@/lib/utils";
+import {
+  getSubjectMeta,
+  SUBJECT_SLUGS,
+  type ReadinessScores,
+  type SubjectSlug,
+} from "@/types";
 
 const DAILY_GOAL_QUESTIONS = 20;
 const DAILY_GOAL_PROGRESS = 0;
@@ -28,32 +36,6 @@ const CHALLENGES = [
     shards: 20,
   },
 ] as const;
-
-const READINESS_SUBJECTS = [
-  {
-    name: "AP Statistics",
-    badgeLabel: "Stats",
-    score: 0,
-    badgeBg: "#E8F0EC",
-    badgeText: "#3D6B4F",
-  },
-  {
-    name: "AP Biology",
-    badgeLabel: "Bio",
-    score: 0,
-    badgeBg: "#E8F2E8",
-    badgeText: "#2E6B3E",
-  },
-  {
-    name: "AP Calculus",
-    badgeLabel: "Calc",
-    score: 0,
-    badgeBg: "#EAE8F0",
-    badgeText: "#4A3D8F",
-  },
-] as const;
-
-const STREAK = 0;
 
 function DashboardCard({
   className,
@@ -83,7 +65,74 @@ function ShardBadge({ amount }: { amount: number }) {
   );
 }
 
-export default function DashboardPage() {
+function isSubjectSlug(value: string): value is SubjectSlug {
+  return (SUBJECT_SLUGS as readonly string[]).includes(value);
+}
+
+function parseReadinessScores(raw: unknown): ReadinessScores {
+  const defaults: ReadinessScores = {
+    "ap-stats": 0,
+    "ap-bio": 0,
+    "ap-calc-ab": 0,
+    "ap-calc-bc": 0,
+  };
+  if (!raw || typeof raw !== "object") return defaults;
+  const obj = raw as Record<string, unknown>;
+  for (const slug of SUBJECT_SLUGS) {
+    const value = obj[slug];
+    if (typeof value === "number" && !Number.isNaN(value)) {
+      defaults[slug] = Math.min(100, Math.max(0, Math.round(value)));
+    }
+  }
+  return defaults;
+}
+
+export default async function DashboardPage() {
+  const { userId } = await auth();
+  let streak = 0;
+  let enrolledSubjects: SubjectSlug[] = [];
+  let readinessScores: ReadinessScores = {
+    "ap-stats": 0,
+    "ap-bio": 0,
+    "ap-calc-ab": 0,
+    "ap-calc-bc": 0,
+  };
+
+  if (userId) {
+    const supabase = await createClient();
+    const { data: user } = await supabase
+      .from("users")
+      .select("id, streak_count, readiness_scores")
+      .eq("clerk_user_id", userId)
+      .single();
+
+    if (user) {
+      streak = user.streak_count ?? 0;
+      readinessScores = parseReadinessScores(user.readiness_scores);
+
+      const { data: rows } = await supabase
+        .from("user_subjects")
+        .select("subject_slug")
+        .eq("user_id", user.id);
+
+      enrolledSubjects = (rows ?? [])
+        .map((r) => r.subject_slug)
+        .filter((slug): slug is SubjectSlug => isSubjectSlug(slug));
+    }
+  }
+
+  const readinessCards = enrolledSubjects.map((slug) => {
+    const meta = getSubjectMeta(slug);
+    return {
+      slug,
+      name: meta.label,
+      badgeLabel: meta.shortLabel,
+      score: readinessScores[slug],
+      badgeBg: meta.bgColor,
+      badgeText: meta.color,
+    };
+  });
+
   return (
     <div className="grid grid-cols-1 gap-6 lg:grid-cols-3">
       <div className="flex flex-col gap-6 lg:col-span-2">
@@ -149,13 +198,13 @@ export default function DashboardPage() {
           <Flame
             className={cn(
               "size-10",
-              STREAK > 0 ? "text-[#C9A84C]" : "text-muted-foreground/50"
+              streak > 0 ? "text-[#C9A84C]" : "text-muted-foreground/50"
             )}
             strokeWidth={1.75}
             aria-hidden
           />
           <p className="mt-3 text-5xl font-semibold tabular-nums tracking-tight text-foreground">
-            {STREAK}
+            {streak}
           </p>
           <p className="mt-1 text-sm text-muted-foreground">Day streak</p>
         </DashboardCard>
@@ -164,30 +213,42 @@ export default function DashboardPage() {
           <h2 className="px-0.5 text-sm font-medium text-muted-foreground">
             Readiness
           </h2>
-          {READINESS_SUBJECTS.map((subject) => (
-            <DashboardCard key={subject.name} className="space-y-3">
-              <div className="flex items-center justify-between gap-2">
-                <span
-                  className="rounded-full px-3 py-0.5 text-xs font-medium"
-                  style={{
-                    backgroundColor: subject.badgeBg,
-                    color: subject.badgeText,
-                  }}
-                >
-                  {subject.badgeLabel}
-                </span>
-                <span className="sr-only">{subject.name}</span>
-              </div>
-              <p className="text-3xl font-semibold tabular-nums tracking-tight text-foreground">
-                {subject.score}
+          {readinessCards.length === 0 ? (
+            <DashboardCard>
+              <p className="text-sm text-muted-foreground">
+                Enroll in a subject on your{" "}
+                <Link href="/dashboard/profile" className="text-primary underline">
+                  profile
+                </Link>{" "}
+                to track readiness.
               </p>
-              <Progress value={subject.score} className="gap-0">
-                <ProgressTrack className="h-2">
-                  <ProgressIndicator />
-                </ProgressTrack>
-              </Progress>
             </DashboardCard>
-          ))}
+          ) : (
+            readinessCards.map((subject) => (
+              <DashboardCard key={subject.slug} className="space-y-3">
+                <div className="flex items-center justify-between gap-2">
+                  <span
+                    className="rounded-full px-3 py-0.5 text-xs font-medium"
+                    style={{
+                      backgroundColor: subject.badgeBg,
+                      color: subject.badgeText,
+                    }}
+                  >
+                    {subject.badgeLabel}
+                  </span>
+                  <span className="sr-only">{subject.name}</span>
+                </div>
+                <p className="text-3xl font-semibold tabular-nums tracking-tight text-foreground">
+                  {subject.score}
+                </p>
+                <Progress value={subject.score} className="gap-0">
+                  <ProgressTrack className="h-2">
+                    <ProgressIndicator />
+                  </ProgressTrack>
+                </Progress>
+              </DashboardCard>
+            ))
+          )}
         </div>
       </div>
     </div>
