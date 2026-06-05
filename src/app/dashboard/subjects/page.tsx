@@ -1,3 +1,5 @@
+// Subjects page placeholder (subject browsing not yet implemented).
+
 export default function SubjectsPage() {
   return (
     <div>

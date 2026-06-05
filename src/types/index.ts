@@ -1,6 +1,4 @@
-// =============================================================================
-// Application / UI unions
-// =============================================================================
+// Application-wide TypeScript types, database row shapes, and subject metadata.
 
 export type SubjectSlug =
   | "ap-stats"
@@ -229,6 +227,9 @@ export const SUBJECTS = [
   },
 ] as const satisfies readonly SubjectMeta[];
 
+/**
+ * Returns metadata for a subject slug; throws if slug is unknown.
+ */
 export function getSubjectMeta(slug: SubjectSlug): SubjectMeta {
   const meta = SUBJECTS.find((s) => s.slug === slug);
   if (!meta) {

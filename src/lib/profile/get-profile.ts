@@ -1,15 +1,22 @@
-import { auth } from "@clerk/nextjs/server";
-import { createClient } from "@/lib/supabase/server";
-import { SUBJECT_SLUGS, type DbUser, type SubjectSlug } from "@/types";
+// Server-side profile loader for the current Clerk user.
 
-function isSubjectSlug(value: string): value is SubjectSlug {
-  return (SUBJECT_SLUGS as readonly string[]).includes(value);
+import { auth } from "@clerk/nextjs/server";
+
+import { createClient } from "@/lib/supabase/server";
+import { isSubjectSlug } from "@/lib/validators/subject-slug";
+import type { DbUser, SubjectSlug } from "@/types";
+
+interface UserSubjectRow {
+  subject_slug: string;
 }
 
 export type GetProfileResult =
   | { user: DbUser; subjects: SubjectSlug[] }
   | { error: string };
 
+/**
+ * Fetches the current user's profile and enrolled subjects from Supabase.
+ */
 export async function getProfileForCurrentUser(): Promise<GetProfileResult> {
   const { userId } = await auth();
   if (!userId) {
@@ -17,15 +24,17 @@ export async function getProfileForCurrentUser(): Promise<GetProfileResult> {
   }
 
   const supabase = await createClient();
-  const { data: user, error: userError } = await supabase
+  const { data: userRow, error: userError } = await supabase
     .from("users")
     .select("*")
     .eq("clerk_user_id", userId)
     .single();
 
-  if (userError || !user) {
+  if (userError || !userRow) {
     return { error: "Could not load profile." };
   }
+
+  const user: DbUser = userRow;
 
   const { data: subjectRows, error: subjectsError } = await supabase
     .from("user_subjects")
@@ -37,8 +46,8 @@ export async function getProfileForCurrentUser(): Promise<GetProfileResult> {
   }
 
   const subjects = (subjectRows ?? [])
-    .map((row) => row.subject_slug)
+    .map((row: UserSubjectRow) => row.subject_slug)
     .filter((slug): slug is SubjectSlug => isSubjectSlug(slug));
 
-  return { user: user as DbUser, subjects };
+  return { user, subjects };
 }

@@ -1,6 +1,9 @@
+// Dashboard home: daily goal, challenges, streak, and readiness scores.
+
 import Link from "next/link";
 import { auth } from "@clerk/nextjs/server";
 import { Coins, Flame } from "lucide-react";
+
 import { Button } from "@/components/ui/button";
 import {
   Progress,
@@ -8,6 +11,7 @@ import {
   ProgressTrack,
 } from "@/components/ui/progress";
 import { createClient } from "@/lib/supabase/server";
+import { isSubjectSlug } from "@/lib/validators/subject-slug";
 import { cn } from "@/lib/utils";
 import {
   getSubjectMeta,
@@ -37,13 +41,12 @@ const CHALLENGES = [
   },
 ] as const;
 
-function DashboardCard({
-  className,
-  children,
-}: {
+interface DashboardCardProps {
   className?: string;
   children: React.ReactNode;
-}) {
+}
+
+function DashboardCard({ className, children }: DashboardCardProps) {
   return (
     <div
       className={cn(
@@ -63,10 +66,6 @@ function ShardBadge({ amount }: { amount: number }) {
       +{amount} Shards
     </span>
   );
-}
-
-function isSubjectSlug(value: string): value is SubjectSlug {
-  return (SUBJECT_SLUGS as readonly string[]).includes(value);
 }
 
 function parseReadinessScores(raw: unknown): ReadinessScores {
@@ -116,7 +115,7 @@ export default async function DashboardPage() {
         .eq("user_id", user.id);
 
       enrolledSubjects = (rows ?? [])
-        .map((r) => r.subject_slug)
+        .map((row) => row.subject_slug)
         .filter((slug): slug is SubjectSlug => isSubjectSlug(slug));
     }
   }

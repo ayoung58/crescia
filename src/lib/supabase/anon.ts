@@ -1,14 +1,14 @@
+// Supabase anon client for unauthenticated reads (e.g. username availability).
+
 import { createClient } from "@supabase/supabase-js";
 
-export function createAnonClient() {
-  const url = process.env.NEXT_PUBLIC_SUPABASE_URL;
-  const anonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY;
+import { SUPABASE_ANON_KEY, SUPABASE_URL } from "@/lib/config";
 
-  if (!url || !anonKey) {
-    throw new Error("Missing Supabase environment variables");
-  }
-
-  return createClient(url, anonKey, {
+/**
+ * Creates a Supabase client with the anon key (no user session).
+ */
+export function createAnonClient(): ReturnType<typeof createClient> {
+  return createClient(SUPABASE_URL, SUPABASE_ANON_KEY, {
     auth: {
       autoRefreshToken: false,
       persistSession: false,

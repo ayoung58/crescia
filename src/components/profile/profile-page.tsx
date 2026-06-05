@@ -1,3 +1,5 @@
+// Client component: profile editing, subject enrollment, and account summary.
+
 "use client";
 
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
@@ -5,16 +7,7 @@ import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useClerk } from "@clerk/nextjs";
 import { motion } from "framer-motion";
-import {
-  BarChart2,
-  Check,
-  Coins,
-  FunctionSquare,
-  Infinity,
-  Leaf,
-  Loader2,
-  Lock,
-} from "lucide-react";
+import { Check, Coins, Loader2, Lock } from "lucide-react";
 import { toast } from "sonner";
 import {
   AlertDialog,
@@ -38,7 +31,15 @@ import {
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Switch } from "@/components/ui/switch";
+import {
+  formatMemberSince,
+  subjectsEqual,
+  type ProfileSnapshot,
+} from "@/components/profile/profile-utils";
 import { useUserStats } from "@/contexts/user-stats-context";
+import { useUsernameAvailability } from "@/hooks/useUsernameAvailability";
+import type { ApiResponse, ProfileData } from "@/lib/api/types";
+import { SUBJECT_DESCRIPTIONS, SUBJECT_ICONS } from "@/lib/constants";
 import { formatWithCommas } from "@/lib/format";
 import {
   USERNAME_MAX,
@@ -52,47 +53,9 @@ import {
   type SubjectSlug,
 } from "@/types";
 
-const SUBJECT_DESCRIPTIONS: Record<SubjectSlug, string> = {
-  "ap-stats": "Probability, inference, and data analysis",
-  "ap-bio": "Cells, genetics, evolution, and ecology",
-  "ap-calc-ab": "Limits, derivatives, and integrals",
-  "ap-calc-bc": "Calc AB plus series and parametric equations",
-};
-
-const SUBJECT_ICONS: Record<
-  SubjectSlug,
-  React.ComponentType<{ className?: string }>
-> = {
-  "ap-stats": BarChart2,
-  "ap-bio": Leaf,
-  "ap-calc-ab": FunctionSquare,
-  "ap-calc-bc": Infinity,
-};
-
-type UsernameStatus = "idle" | "checking" | "available" | "taken" | "error";
-
-interface ProfileSnapshot {
-  firstName: string;
-  lastName: string;
-  username: string;
-  emailNotifications: boolean;
-}
-
-function subjectsEqual(a: SubjectSlug[], b: SubjectSlug[]) {
-  if (a.length !== b.length) return false;
-  const sortedA = [...a].sort();
-  const sortedB = [...b].sort();
-  return sortedA.every((slug, i) => slug === sortedB[i]);
-}
-
-function formatMemberSince(iso: string) {
-  return new Date(iso).toLocaleDateString("en-US", {
-    month: "long",
-    day: "numeric",
-    year: "numeric",
-  });
-}
-
+/**
+ * Profile settings page with editable fields and subject management.
+ */
 export function ProfilePage() {
   const router = useRouter();
   const { openUserProfile } = useClerk();
@@ -113,41 +76,37 @@ export function ProfilePage() {
   const [selectedSubjects, setSelectedSubjects] = useState<SubjectSlug[]>([]);
   const [savedSubjects, setSavedSubjects] = useState<SubjectSlug[]>([]);
 
-  const [usernameStatus, setUsernameStatus] = useState<UsernameStatus>("idle");
   const [savingProfile, setSavingProfile] = useState(false);
   const [savingSubjects, setSavingSubjects] = useState(false);
 
   const [leaveDialogOpen, setLeaveDialogOpen] = useState(false);
   const [pendingHref, setPendingHref] = useState<string | null>(null);
 
-  const loadProfile = useCallback(async () => {
+  const loadProfile = useCallback(async (): Promise<void> => {
     setLoading(true);
     try {
       const res = await fetch("/api/profile");
-      if (!res.ok) {
-        toast.error("Could not load your profile.");
+      const json = (await res.json()) as ApiResponse<ProfileData>;
+      if (!json.success) {
+        toast.error(json.error ?? "Could not load your profile.");
         return;
       }
-      const data = (await res.json()) as {
-        user: DbUser;
-        subjects: SubjectSlug[];
-      };
-      setUser(data.user);
-      setShards(data.user.shards);
-      setFirstName(data.user.first_name ?? "");
-      setLastName(data.user.last_name ?? "");
-      setUsername(data.user.username ?? "");
-      setSavedUsername(data.user.username ?? "");
-      setEmailNotifications(data.user.email_notifications);
+      const { user: profileUser, subjects } = json.data;
+      setUser(profileUser);
+      setShards(profileUser.shards);
+      setFirstName(profileUser.first_name ?? "");
+      setLastName(profileUser.last_name ?? "");
+      setUsername(profileUser.username ?? "");
+      setSavedUsername(profileUser.username ?? "");
+      setEmailNotifications(profileUser.email_notifications);
       setSavedProfile({
-        firstName: data.user.first_name ?? "",
-        lastName: data.user.last_name ?? "",
-        username: data.user.username ?? "",
-        emailNotifications: data.user.email_notifications,
+        firstName: profileUser.first_name ?? "",
+        lastName: profileUser.last_name ?? "",
+        username: profileUser.username ?? "",
+        emailNotifications: profileUser.email_notifications,
       });
-      setSelectedSubjects(data.subjects);
-      setSavedSubjects(data.subjects);
-      setUsernameStatus("idle");
+      setSelectedSubjects(subjects);
+      setSavedSubjects(subjects);
     } catch {
       toast.error("Could not load your profile.");
     } finally {
@@ -180,61 +139,10 @@ export function ProfilePage() {
   const formatValidation = validateUsernameFormat(username);
   const usernameFormatValid = formatValidation.valid && username.length > 0;
 
-  const checkUsername = useCallback(async (value: string) => {
-    const trimmed = value.trim();
-    const format = validateUsernameFormat(trimmed);
-    if (!format.valid) {
-      setUsernameStatus("idle");
-      return;
-    }
-
-    setUsernameStatus("checking");
-
-    try {
-      const res = await fetch(
-        `/api/onboarding/check-username?username=${encodeURIComponent(trimmed)}`
-      );
-      if (!res.ok) {
-        setUsernameStatus("error");
-        return;
-      }
-      const data = (await res.json()) as {
-        available: boolean;
-        valid: boolean;
-      };
-      if (!data.valid) {
-        setUsernameStatus("idle");
-        return;
-      }
-      setUsernameStatus(data.available ? "available" : "taken");
-    } catch {
-      setUsernameStatus("error");
-    }
-  }, []);
-
-  useEffect(() => {
-    const trimmed = username.trim();
-    if (!trimmed) {
-      setUsernameStatus("idle");
-      return;
-    }
-
-    if (!usernameChanged) {
-      setUsernameStatus("idle");
-      return;
-    }
-
-    if (!validateUsernameFormat(trimmed).valid) {
-      setUsernameStatus("idle");
-      return;
-    }
-
-    const timer = setTimeout(() => {
-      void checkUsername(trimmed);
-    }, 400);
-
-    return () => clearTimeout(timer);
-  }, [username, usernameChanged, checkUsername]);
+  const { status: usernameStatus } = useUsernameAvailability({
+    username,
+    shouldCheck: usernameChanged && usernameFormatValid,
+  });
 
   const canSaveProfile =
     profileDirty &&
@@ -253,7 +161,7 @@ export function ProfilePage() {
     });
   };
 
-  const handleSaveProfile = async () => {
+  const handleSaveProfile = async (): Promise<void> => {
     if (!canSaveProfile) return;
     setSavingProfile(true);
     try {
@@ -267,9 +175,9 @@ export function ProfilePage() {
           emailNotifications,
         }),
       });
-      const data = (await res.json()) as { success: boolean; error?: string };
-      if (!data.success) {
-        toast.error(data.error ?? "Failed to update profile.");
+      const json = (await res.json()) as ApiResponse<null>;
+      if (!json.success) {
+        toast.error(json.error ?? "Failed to update profile.");
         return;
       }
       const snapshot: ProfileSnapshot = {
@@ -300,7 +208,7 @@ export function ProfilePage() {
     }
   };
 
-  const handleSaveSubjects = async () => {
+  const handleSaveSubjects = async (): Promise<void> => {
     if (!subjectsDirty) return;
     setSavingSubjects(true);
     try {
@@ -309,9 +217,9 @@ export function ProfilePage() {
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ subjects: selectedSubjects }),
       });
-      const data = (await res.json()) as { success?: boolean; error?: string };
-      if (!res.ok || !data.success) {
-        toast.error(data.error ?? "Failed to update subjects.");
+      const json = (await res.json()) as ApiResponse<null>;
+      if (!json.success) {
+        toast.error(json.error ?? "Failed to update subjects.");
         return;
       }
       setSavedSubjects([...selectedSubjects]);

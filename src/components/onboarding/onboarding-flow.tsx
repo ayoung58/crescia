@@ -1,22 +1,20 @@
+// Multi-step onboarding flow: name, subjects, and confirmation.
+
 "use client";
 
-import { useCallback, useEffect, useState } from "react";
+import { useState } from "react";
 import { useRouter } from "next/navigation";
 import { AnimatePresence, motion } from "framer-motion";
-import {
-  BarChart2,
-  Check,
-  FunctionSquare,
-  Infinity,
-  Leaf,
-  Loader2,
-} from "lucide-react";
+import { Check, Loader2 } from "lucide-react";
 import { toast } from "sonner";
+
 import { completeOnboardingAction } from "@/app/actions/onboarding";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Badge } from "@/components/ui/badge";
+import { useUsernameAvailability } from "@/hooks/useUsernameAvailability";
+import { SUBJECT_DESCRIPTIONS, SUBJECT_ICONS } from "@/lib/constants";
 import { cn } from "@/lib/utils";
 import {
   USERNAME_MAX,
@@ -31,30 +29,14 @@ import {
 
 const STEP_COUNT = 3;
 
-const SUBJECT_DESCRIPTIONS: Record<SubjectSlug, string> = {
-  "ap-stats": "Probability, inference, and data analysis",
-  "ap-bio": "Cells, genetics, evolution, and ecology",
-  "ap-calc-ab": "Limits, derivatives, and integrals",
-  "ap-calc-bc": "Calc AB plus series and parametric equations",
-};
-
-const SUBJECT_ICONS: Record<
-  SubjectSlug,
-  React.ComponentType<{ className?: string }>
-> = {
-  "ap-stats": BarChart2,
-  "ap-bio": Leaf,
-  "ap-calc-ab": FunctionSquare,
-  "ap-calc-bc": Infinity,
-};
-
 interface OnboardingFlowProps {
   clerkFirstName: string;
   clerkLastName: string;
 }
 
-type UsernameStatus = "idle" | "checking" | "available" | "taken" | "error";
-
+/**
+ * Three-step onboarding wizard for new users after sign-up.
+ */
 export function OnboardingFlow({
   clerkFirstName,
   clerkLastName,
@@ -66,9 +48,13 @@ export function OnboardingFlow({
   const [firstName, setFirstName] = useState(clerkFirstName);
   const [lastName, setLastName] = useState(clerkLastName);
   const [username, setUsername] = useState("");
-  const [usernameStatus, setUsernameStatus] = useState<UsernameStatus>("idle");
   const [selectedSubjects, setSelectedSubjects] = useState<SubjectSlug[]>([]);
   const [isSubmitting, setIsSubmitting] = useState(false);
+
+  const { status: usernameStatus } = useUsernameAvailability({
+    username,
+    shouldCheck: username.trim().length > 0,
+  });
 
   const formatValidation = validateUsernameFormat(username);
   const usernameFormatValid = formatValidation.valid && username.length > 0;
@@ -80,64 +66,12 @@ export function OnboardingFlow({
 
   const displayName = firstName.trim() || username.trim() || "there";
 
-  const checkUsername = useCallback(async (value: string) => {
-    const trimmed = value.trim();
-    const format = validateUsernameFormat(trimmed);
-
-    if (!format.valid) {
-      setUsernameStatus("idle");
-      return;
-    }
-
-    setUsernameStatus("checking");
-
-    try {
-      const res = await fetch(
-        `/api/onboarding/check-username?username=${encodeURIComponent(trimmed)}`
-      );
-      if (!res.ok) {
-        setUsernameStatus("error");
-        return;
-      }
-      const data = (await res.json()) as {
-        available: boolean;
-        valid: boolean;
-      };
-      if (!data.valid) {
-        setUsernameStatus("idle");
-        return;
-      }
-      setUsernameStatus(data.available ? "available" : "taken");
-    } catch {
-      setUsernameStatus("error");
-    }
-  }, []);
-
-  useEffect(() => {
-    const trimmed = username.trim();
-    if (!trimmed) {
-      setUsernameStatus("idle");
-      return;
-    }
-
-    if (!validateUsernameFormat(trimmed).valid) {
-      setUsernameStatus("idle");
-      return;
-    }
-
-    const timer = setTimeout(() => {
-      void checkUsername(trimmed);
-    }, 400);
-
-    return () => clearTimeout(timer);
-  }, [username, checkUsername]);
-
-  const goToStep = (next: number) => {
+  const goToStep = (next: number): void => {
     setDirection(next > step ? 1 : -1);
     setStep(next);
   };
 
-  const toggleSubject = (slug: SubjectSlug) => {
+  const toggleSubject = (slug: SubjectSlug): void => {
     setSelectedSubjects((prev) =>
       prev.includes(slug)
         ? prev.filter((s) => s !== slug)
@@ -145,7 +79,7 @@ export function OnboardingFlow({
     );
   };
 
-  const handleComplete = async () => {
+  const handleComplete = async (): Promise<void> => {
     setIsSubmitting(true);
     try {
       const result = await completeOnboardingAction({

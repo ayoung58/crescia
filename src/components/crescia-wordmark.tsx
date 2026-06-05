@@ -1,6 +1,15 @@
+// Crescia wordmark text component for branding in headers and auth pages.
+
 import { cn } from "@/lib/utils";
 
-export function CresciaWordmark({ className }: { className?: string }) {
+interface CresciaWordmarkProps {
+  className?: string;
+}
+
+/**
+ * Renders the Crescia product name as styled text.
+ */
+export function CresciaWordmark({ className }: CresciaWordmarkProps) {
   return (
     <span
       className={cn(

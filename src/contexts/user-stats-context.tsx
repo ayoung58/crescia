@@ -1,3 +1,5 @@
+// Client context: shard balance and refresh from profile API.
+
 "use client";
 
 import {
@@ -9,6 +11,8 @@ import {
   type ReactNode,
 } from "react";
 
+import type { ApiResponse, ProfileData } from "@/lib/api/types";
+
 interface UserStatsContextValue {
   shards: number;
   setShards: (shards: number) => void;
@@ -17,22 +21,27 @@ interface UserStatsContextValue {
 
 const UserStatsContext = createContext<UserStatsContextValue | null>(null);
 
+interface UserStatsProviderProps {
+  initialShards: number;
+  children: ReactNode;
+}
+
+/**
+ * Provides shard balance to dashboard shell; refreshes from /api/profile.
+ */
 export function UserStatsProvider({
   initialShards,
   children,
-}: {
-  initialShards: number;
-  children: ReactNode;
-}) {
+}: UserStatsProviderProps) {
   const [shards, setShards] = useState(initialShards);
 
-  const refreshUserStats = useCallback(async () => {
+  const refreshUserStats = useCallback(async (): Promise<void> => {
     try {
       const res = await fetch("/api/profile");
       if (!res.ok) return;
-      const data = (await res.json()) as { user?: { shards?: number } };
-      if (typeof data.user?.shards === "number") {
-        setShards(data.user.shards);
+      const json = (await res.json()) as ApiResponse<ProfileData>;
+      if (json.success && typeof json.data.user.shards === "number") {
+        setShards(json.data.user.shards);
       }
     } catch {
       // ignore network errors for background refresh
@@ -51,7 +60,10 @@ export function UserStatsProvider({
   );
 }
 
-export function useUserStats() {
+/**
+ * Returns shard balance and refresh helpers from UserStatsProvider.
+ */
+export function useUserStats(): UserStatsContextValue {
   const ctx = useContext(UserStatsContext);
   if (!ctx) {
     throw new Error("useUserStats must be used within UserStatsProvider");

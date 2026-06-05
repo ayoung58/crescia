@@ -1,3 +1,5 @@
+// Dashboard shell: sidebar navigation, mobile nav, and shard display.
+
 "use client";
 
 import Link from "next/link";
@@ -33,6 +35,18 @@ function isNavActive(pathname: string, href: string) {
   return pathname === href || pathname.startsWith(`${href}/`);
 }
 
+interface NavLinkProps {
+  href: string;
+  label: string;
+  icon: LucideIcon;
+  active: boolean;
+  collapsed?: boolean;
+  layout: "sidebar" | "mobile";
+}
+
+/**
+ * Renders a single nav link for sidebar or mobile bottom bar.
+ */
 function NavLink({
   href,
   label,
@@ -40,14 +54,7 @@ function NavLink({
   active,
   collapsed,
   layout,
-}: {
-  href: string;
-  label: string;
-  icon: LucideIcon;
-  active: boolean;
-  collapsed?: boolean;
-  layout: "sidebar" | "mobile";
-}) {
+}: NavLinkProps) {
   if (layout === "mobile") {
     return (
       <Link
@@ -86,7 +93,14 @@ function NavLink({
   );
 }
 
-export function DashboardShell({ children }: { children: React.ReactNode }) {
+interface DashboardShellProps {
+  children: React.ReactNode;
+}
+
+/**
+ * Layout wrapper with collapsible sidebar and mobile bottom navigation.
+ */
+export function DashboardShell({ children }: DashboardShellProps) {
   const pathname = usePathname();
   const [collapsed, setCollapsed] = useState(false);
   const { shards } = useUserStats();

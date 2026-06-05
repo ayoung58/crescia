@@ -1,3 +1,5 @@
+// Client component: study session configuration and active session placeholder.
+
 "use client";
 
 import {
@@ -6,7 +8,6 @@ import {
   useMemo,
   useRef,
   useState,
-  type ComponentType,
 } from "react";
 import Link from "next/link";
 import { useRouter, useSearchParams } from "next/navigation";
@@ -33,8 +34,16 @@ import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import { Label } from "@/components/ui/label";
 import { Switch } from "@/components/ui/switch";
+import { SessionTypeCard } from "@/components/study/session-type-card";
+import {
+  modeLabel,
+  timingSummary,
+} from "@/components/study/study-session-utils";
 import { useStopwatch } from "@/hooks/useStopwatch";
+import type { ApiResponse, SessionStartData } from "@/lib/api/types";
 import { cn } from "@/lib/utils";
+import { isSessionMode } from "@/lib/validators/session-mode";
+import { isSubjectSlug } from "@/lib/validators/subject-slug";
 import {
   getSubjectMeta,
   SUBJECTS,
@@ -44,27 +53,13 @@ import {
   type SubjectSlug,
 } from "@/types";
 
-const SESSION_MODES: SessionMode[] = ["practice_questions", "practice_exam"];
-
-function isSessionMode(value: string | null): value is SessionMode {
-  return value !== null && (SESSION_MODES as readonly string[]).includes(value);
-}
-
-function modeLabel(mode: SessionMode): string {
-  return mode === "practice_questions" ? "Practice Questions" : "Practice Exam";
-}
-
-function timingSummary(config: SessionConfig): string {
-  if (config.mode === "practice_exam") {
-    return config.timed ? "Timed" : "Untimed";
-  }
-  return config.stopwatch ? "Stopwatch on" : "Stopwatch off";
-}
-
 interface StudySessionProps {
   enrolledSlugs: SubjectSlug[];
 }
 
+/**
+ * Renders study session setup and the active session shell (questions TBD).
+ */
 export function StudySession({ enrolledSlugs }: StudySessionProps) {
   const router = useRouter();
   const searchParams = useSearchParams();
@@ -120,15 +115,21 @@ export function StudySession({ enrolledSlugs }: StudySessionProps) {
     const paramSubject = searchParams.get("subject");
     const paramMode = searchParams.get("mode");
 
-    const validSubject =
+    let validSubject: SubjectSlug | null = null;
+    if (
       paramSubject &&
-      enrolledSlugs.includes(paramSubject as SubjectSlug)
-        ? (paramSubject as SubjectSlug)
-        : enrolledSubjects.length === 1
-          ? enrolledSubjects[0].slug
-          : null;
+      isSubjectSlug(paramSubject) &&
+      enrolledSlugs.includes(paramSubject)
+    ) {
+      validSubject = paramSubject;
+    } else if (enrolledSubjects.length === 1) {
+      validSubject = enrolledSubjects[0].slug;
+    }
 
-    const validMode = isSessionMode(paramMode) ? paramMode : null;
+    let validMode: SessionMode | null = null;
+    if (paramMode && isSessionMode(paramMode)) {
+      validMode = paramMode;
+    }
 
     setSubject(validSubject);
     setMode(validMode);
@@ -144,12 +145,12 @@ export function StudySession({ enrolledSlugs }: StudySessionProps) {
   const canStart = Boolean(subject && mode);
   const singleSubject = enrolledSubjects.length === 1;
 
-  const handleSubjectChange = (slug: SubjectSlug) => {
+  const handleSubjectChange = (slug: SubjectSlug): void => {
     if (singleSubject) return;
     setSubject(slug);
   };
 
-  const handleModeChange = (nextMode: SessionMode) => {
+  const handleModeChange = (nextMode: SessionMode): void => {
     setMode(nextMode);
     if (nextMode === "practice_exam") {
       setStopwatch(false);
@@ -158,7 +159,7 @@ export function StudySession({ enrolledSlugs }: StudySessionProps) {
     }
   };
 
-  const handleStart = async () => {
+  const handleStart = async (): Promise<void> => {
     if (!subject || !mode) return;
 
     setIsStarting(true);
@@ -168,16 +169,16 @@ export function StudySession({ enrolledSlugs }: StudySessionProps) {
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ subject, mode, timed, stopwatch }),
       });
-      const data = await res.json();
+      const json = (await res.json()) as ApiResponse<SessionStartData>;
 
-      if (!data.success) {
-        toast.error(data.error ?? "Could not start session.");
+      if (!json.success) {
+        toast.error(json.error ?? "Could not start session.");
         return;
       }
 
       const config: SessionConfig = { subject, mode, timed, stopwatch };
       setActiveConfig(config);
-      setActiveSessionId(data.sessionId);
+      setActiveSessionId(json.data.sessionId);
       setView("active");
     } catch {
       toast.error("Could not start session.");
@@ -186,7 +187,7 @@ export function StudySession({ enrolledSlugs }: StudySessionProps) {
     }
   };
 
-  const handleEndSession = async () => {
+  const handleEndSession = async (): Promise<void> => {
     if (!activeSessionId || !activeConfig) return;
 
     setIsEnding(true);
@@ -196,10 +197,10 @@ export function StudySession({ enrolledSlugs }: StudySessionProps) {
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ sessionId: activeSessionId }),
       });
-      const data = await res.json();
+      const json = (await res.json()) as ApiResponse<null>;
 
-      if (!data.success) {
-        toast.error(data.error ?? "Could not end session.");
+      if (!json.success) {
+        toast.error(json.error ?? "Could not end session.");
         return;
       }
 
@@ -362,27 +363,25 @@ export function StudySession({ enrolledSlugs }: StudySessionProps) {
                             </AnimatePresence>
                           </>
                         ) : (
-                          <>
-                            <div className="flex items-center justify-between gap-4">
-                              <div>
-                                <Label
-                                  htmlFor="question-stopwatch"
-                                  className="cursor-pointer"
-                                >
-                                  Question Stopwatch
-                                </Label>
-                                <p className="mt-1 text-xs text-muted-foreground">
-                                  Tracks how long each question takes. Shown as a
-                                  small timer.
-                                </p>
-                              </div>
-                              <Switch
-                                id="question-stopwatch"
-                                checked={stopwatch}
-                                onCheckedChange={setStopwatch}
-                              />
+                          <div className="flex items-center justify-between gap-4">
+                            <div>
+                              <Label
+                                htmlFor="question-stopwatch"
+                                className="cursor-pointer"
+                              >
+                                Question Stopwatch
+                              </Label>
+                              <p className="mt-1 text-xs text-muted-foreground">
+                                Tracks how long each question takes. Shown as a
+                                small timer.
+                              </p>
                             </div>
-                          </>
+                            <Switch
+                              id="question-stopwatch"
+                              checked={stopwatch}
+                              onCheckedChange={setStopwatch}
+                            />
+                          </div>
                         )}
                       </div>
                     </motion.section>
@@ -393,7 +392,7 @@ export function StudySession({ enrolledSlugs }: StudySessionProps) {
                   className="w-full rounded-full"
                   size="lg"
                   disabled={!canStart || isStarting}
-                  onClick={handleStart}
+                  onClick={() => void handleStart()}
                 >
                   {isStarting ? "Starting…" : "Start Session →"}
                 </Button>
@@ -491,7 +490,7 @@ export function StudySession({ enrolledSlugs }: StudySessionProps) {
             <AlertDialogAction
               variant="destructive"
               disabled={isEnding}
-              onClick={handleEndSession}
+              onClick={() => void handleEndSession()}
             >
               {isEnding ? "Ending…" : "End Session"}
             </AlertDialogAction>
@@ -499,41 +498,5 @@ export function StudySession({ enrolledSlugs }: StudySessionProps) {
         </AlertDialogContent>
       </AlertDialog>
     </div>
-  );
-}
-
-function SessionTypeCard({
-  title,
-  description,
-  icon: Icon,
-  selected,
-  onSelect,
-}: {
-  title: string;
-  description: string;
-  icon: ComponentType<{ className?: string }>;
-  selected: boolean;
-  onSelect: () => void;
-}) {
-  return (
-    <button
-      type="button"
-      onClick={onSelect}
-      className={cn(
-        "rounded-2xl p-4 text-left transition-colors",
-        selected
-          ? "border-2 border-primary bg-primary/5"
-          : "border border-border bg-background hover:bg-muted/30"
-      )}
-    >
-      <Icon
-        className={cn(
-          "mb-3 size-6",
-          selected ? "text-primary" : "text-muted-foreground"
-        )}
-      />
-      <p className="font-medium">{title}</p>
-      <p className="mt-1 text-xs text-muted-foreground">{description}</p>
-    </button>
   );
 }

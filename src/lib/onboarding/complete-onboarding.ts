@@ -1,7 +1,11 @@
+// Onboarding completion logic: saves profile fields and subject enrollments.
+
 import { auth } from "@clerk/nextjs/server";
-import { createClient } from "@/lib/supabase/server";
+
 import { validateUsernameFormat } from "@/lib/onboarding/username";
-import { SUBJECT_SLUGS, type SubjectSlug } from "@/types";
+import { createClient } from "@/lib/supabase/server";
+import { isSubjectSlug } from "@/lib/validators/subject-slug";
+import type { SubjectSlug } from "@/types";
 
 export interface CompleteOnboardingInput {
   firstName: string;
@@ -15,10 +19,15 @@ export interface CompleteOnboardingResult {
   error?: string;
 }
 
-function isSubjectSlug(value: string): value is SubjectSlug {
-  return (SUBJECT_SLUGS as readonly string[]).includes(value);
+interface CurrentUserRow {
+  id: string;
+  username: string | null;
+  onboarding_complete: boolean;
 }
 
+/**
+ * Validates and persists onboarding data for the signed-in user.
+ */
 export async function completeOnboarding(
   input: CompleteOnboardingInput
 ): Promise<CompleteOnboardingResult> {
@@ -56,10 +65,9 @@ export async function completeOnboarding(
     return { success: false, error: "Could not load your profile." };
   }
 
-  if (
-    existingUser &&
-    existingUser.id !== currentUser.id
-  ) {
+  const typedCurrentUser = currentUser as CurrentUserRow;
+
+  if (existingUser && existingUser.id !== typedCurrentUser.id) {
     return { success: false, error: "That username is already taken." };
   }
 
@@ -74,14 +82,14 @@ export async function completeOnboarding(
       username,
       onboarding_complete: true,
     })
-    .eq("id", currentUser.id);
+    .eq("id", typedCurrentUser.id);
 
   if (updateError) {
     return { success: false, error: "Failed to save your profile." };
   }
 
   const rows = subjects.map((subject_slug) => ({
-    user_id: currentUser.id,
+    user_id: typedCurrentUser.id,
     subject_slug,
   }));
 
@@ -94,9 +102,9 @@ export async function completeOnboarding(
       .from("users")
       .update({
         onboarding_complete: false,
-        username: currentUser.username,
+        username: typedCurrentUser.username,
       })
-      .eq("id", currentUser.id);
+      .eq("id", typedCurrentUser.id);
 
     return { success: false, error: "Failed to save your subjects." };
   }

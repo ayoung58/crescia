@@ -1,9 +1,12 @@
+// Study page: loads enrolled subjects server-side and renders StudySession.
+
 import { Suspense } from "react";
 import { auth } from "@clerk/nextjs/server";
 import { redirect } from "next/navigation";
 
 import { StudySession } from "@/components/study/study-session";
 import { createClient } from "@/lib/supabase/server";
+import { isSubjectSlug } from "@/lib/validators/subject-slug";
 import type { SubjectSlug } from "@/types";
 
 async function StudySessionLoader() {
@@ -28,8 +31,8 @@ async function StudySessionLoader() {
       .eq("user_id", user.id);
 
     enrolledSlugs = (rows ?? [])
-      .map((r) => r.subject_slug)
-      .filter((slug): slug is SubjectSlug => typeof slug === "string");
+      .map((row) => row.subject_slug)
+      .filter((slug): slug is SubjectSlug => isSubjectSlug(slug));
   }
 
   return <StudySession enrolledSlugs={enrolledSlugs} />;

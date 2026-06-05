@@ -1,3 +1,5 @@
+// Garden page placeholder (gamification UI not yet implemented).
+
 export default function GardenPage() {
   return (
     <div>

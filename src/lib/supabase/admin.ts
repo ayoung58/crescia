@@ -1,14 +1,17 @@
+// Supabase service-role client for webhook and admin operations (bypasses RLS).
+
 import { createClient } from "@supabase/supabase-js";
 
-export function createAdminClient() {
-  const url = process.env.NEXT_PUBLIC_SUPABASE_URL;
-  const serviceRoleKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
+import {
+  SUPABASE_SERVICE_ROLE_KEY,
+  SUPABASE_URL,
+} from "@/lib/config";
 
-  if (!url || !serviceRoleKey) {
-    throw new Error("Missing Supabase environment variables");
-  }
-
-  return createClient(url, serviceRoleKey, {
+/**
+ * Creates a Supabase admin client using the service role key.
+ */
+export function createAdminClient(): ReturnType<typeof createClient> {
+  return createClient(SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY, {
     auth: {
       autoRefreshToken: false,
       persistSession: false,
