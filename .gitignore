@@ -35,3 +35,4 @@ yarn-error.log*
 *.tsbuildinfo
 next-env.d.ts
 src/lib/supabase/schema.sql
+src/lib/supabase/study_schema.sql

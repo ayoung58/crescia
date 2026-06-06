@@ -53,6 +53,7 @@ export interface DbUser {
   question_count_reset_date: string | null;
   email_notifications: boolean;
   readiness_scores: ReadinessScores;
+  questions_answered_lifetime: number;
   created_at: string;
   updated_at: string;
 }
@@ -109,6 +110,7 @@ export interface DbQuestionsCache {
   topic_tag: string;
   difficulty: Difficulty | null;
   question_type: QuestionType | null;
+  objective_code: string | null;
   question_json: unknown;
   used_count: number;
   created_at: string;
@@ -170,6 +172,60 @@ export interface DbSubscription {
   current_period_end: string | null;
   created_at: string;
   updated_at: string;
+}
+
+export interface SubjectObjective {
+  id: string;
+  subject_slug: SubjectSlug;
+  unit_number: number;
+  unit_title: string;
+  objective_code: string;
+  objective_description: string;
+  topic_tag: string;
+  exam_weight_min: number | null;
+  exam_weight_max: number | null;
+  is_frq_eligible: boolean;
+}
+
+export interface ExamSection {
+  section: string | number;
+  name: string;
+  question_type: "mcq" | "frq";
+  count: number;
+  time_minutes: number | null;
+  calculator?: boolean;
+  notes?: string;
+}
+
+export interface ExamConfig {
+  id: string;
+  subject_slug: SubjectSlug;
+  display_name: string;
+  total_mcq: number;
+  total_frq: number;
+  mcq_time_minutes: number;
+  frq_time_minutes: number;
+  total_time_minutes: number;
+  sections: ExamSection[];
+  notes: string | null;
+  updated_at: string;
+}
+
+export interface QuestionProgress {
+  id: string;
+  user_id: string;
+  session_id: string | null;
+  question_cache_id: string | null;
+  subject_slug: SubjectSlug;
+  topic_tag: string;
+  objective_code: string | null;
+  question_type: "mcq" | "frq";
+  difficulty: "easy" | "medium" | "hard" | null;
+  is_correct: boolean;
+  selected_answer: string | null;
+  time_spent_seconds: number;
+  hint_used: boolean;
+  answered_at: string;
 }
 
 // =============================================================================
@@ -248,6 +304,16 @@ export interface SessionConfig {
   timed: boolean;
   /** Only applies when mode === "practice_questions" */
   stopwatch: boolean;
+}
+
+export type PracticeQuestionDifficulty = "easy" | "mixed" | "hard";
+
+export interface PracticeQuestionsConfig {
+  subject_slug: SubjectSlug;
+  /** null = any topic */
+  topic_tag: string | null;
+  difficulty: PracticeQuestionDifficulty;
+  question_type: "mcq" | "frq";
 }
 
 export interface Question {
