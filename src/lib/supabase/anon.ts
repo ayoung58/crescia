@@ -7,7 +7,7 @@ import { SUPABASE_ANON_KEY, SUPABASE_URL } from "@/lib/config";
 /**
  * Creates a Supabase client with the anon key (no user session).
  */
-export function createAnonClient(): ReturnType<typeof createClient> {
+export function createAnonClient() {
   return createClient(SUPABASE_URL, SUPABASE_ANON_KEY, {
     auth: {
       autoRefreshToken: false,

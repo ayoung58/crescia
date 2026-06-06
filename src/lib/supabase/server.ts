@@ -9,9 +9,7 @@ import { SUPABASE_ANON_KEY, SUPABASE_URL } from "@/lib/config";
 /**
  * Creates a Supabase client authenticated with the current Clerk session JWT.
  */
-export async function createClient(): Promise<
-  ReturnType<typeof createServerClient>
-> {
+export async function createClient() {
   const cookieStore = await cookies();
   const { getToken } = await auth();
   const supabaseToken = await getToken({ template: "supabase" });

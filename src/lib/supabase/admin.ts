@@ -10,7 +10,7 @@ import {
 /**
  * Creates a Supabase admin client using the service role key.
  */
-export function createAdminClient(): ReturnType<typeof createClient> {
+export function createAdminClient() {
   return createClient(SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY, {
     auth: {
       autoRefreshToken: false,

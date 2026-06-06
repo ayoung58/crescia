@@ -1,5 +1,7 @@
 // Server Action: completes onboarding and revalidates dashboard routes.
 
+"use server";
+
 import { revalidatePath } from "next/cache";
 
 import {

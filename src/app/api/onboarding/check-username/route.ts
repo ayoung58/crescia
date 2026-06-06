@@ -2,7 +2,7 @@
 
 import { NextRequest } from "next/server";
 
-import { jsonError, jsonSuccess } from "@/lib/api/response";
+import { jsonSuccess } from "@/lib/api/response";
 import { validateUsernameFormat } from "@/lib/onboarding/username";
 import { createAnonClient } from "@/lib/supabase/anon";
 
